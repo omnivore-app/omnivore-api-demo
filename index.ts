@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const SEARCH_TERM = process.env.SEARCH_TERM ?? ''
-const API_URL = process.env.OMNIVORE_API_URL ?? "https://api-prod.omnivore.app/api/graphql"
+const API_URL = process.env.OMNIVORE_API_URL ?? 'https://api-prod.omnivore.app/api/graphql'
 
 enum SortOrder {
   ASCENDING = 'ASCENDING',
@@ -39,6 +39,14 @@ export type Highlight = {
   annotation?: string
 }
 
+// Omnivore's `articles` API returns pages of articles. Here we specify to return
+// a page of `limit` items starting at `cursor`. The `cursor` is the last item
+// in the previous page of data fetched (or undefined if this is the first page).
+//
+// Here we request an articles `id`, `title`, `originalArticleUrl`, and its
+// highlights. For highlights we just request the `id`, `quote`, and `annotation`.
+// The `quote` is the section of text highlighted, and `annotation` is an optional
+// comment that the user can add to the highlight.
 const fetchPage = async (
   cursor: string | undefined,
   limit: number,
@@ -107,17 +115,13 @@ const fetchPage = async (
   return response.data.data.articles as LibraryItems
 }
 
-const fetchLinks = async (): Promise<void> => {
-  const page = await fetchPage(undefined, 10, '')
-  console.log('page', page.edges.map(e => e.node.originalArticleUrl))
- }
-
+// This iterator handles pagination of the Omnivore API. It will fetch all items
+// matching the search query.
 async function* fetchAllLinks(start: string | undefined, searchQuery: string) {
   let cursor = start
   let hasNextPage = true
   while (hasNextPage) {
     const nextPage = await fetchPage(cursor, 10, searchQuery)
-    console.log('totalCount', nextPage.pageInfo.totalCount)
     for (const edge of nextPage.edges) {
       yield edge.node
     }
