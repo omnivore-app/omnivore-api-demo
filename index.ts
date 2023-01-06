@@ -1,43 +1,38 @@
-import axios from 'axios'
+import axios from "axios";
+import fs from "fs";
 
-const SEARCH_TERM = process.env.SEARCH_TERM ?? ''
-const API_URL = process.env.OMNIVORE_API_URL ?? 'https://api-prod.omnivore.app/api/graphql'
-
-enum SortOrder {
-  ASCENDING = 'ASCENDING',
-  DESCENDING = 'DESCENDING',
-}
+const SEARCH_TERM = process.env.SEARCH_TERM ?? "";
+const API_URL =
+  process.env.OMNIVORE_API_URL ?? "https://api-prod.omnivore.app/api/graphql";
 
 type LibraryItems = {
-  edges: LibraryItem[]
-  pageInfo: PageInfo
-  errorCodes?: string[]
-}
+  edges: LibraryItem[];
+  pageInfo: PageInfo;
+  errorCodes?: string[];
+};
 
 export type LibraryItem = {
-  cursor: string
-  node: LibraryItemNode
-}
+  cursor: string;
+  node: LibraryItemNode;
+};
 
 export type LibraryItemNode = {
-  id: string
-  title: string
-  originalArticleUrl: string
-  sharedComment?: string
-  highlights: Highlight[]
-}
+  slug: string;
+  content: string;
+  highlights: Highlight[];
+};
 
 export type PageInfo = {
-  hasNextPage: boolean
-  endCursor: string
-  totalCount: number
-}
+  hasNextPage: boolean;
+  endCursor: string;
+  totalCount: number;
+};
 
 export type Highlight = {
-  id: string
-  quote: string
-  annotation?: string
-}
+  id: string;
+  quote: string;
+  annotation?: string;
+};
 
 // Omnivore's `articles` API returns pages of articles. Here we specify to return
 // a page of `limit` items starting at `cursor`. The `cursor` is the last item
@@ -50,45 +45,35 @@ export type Highlight = {
 const fetchPage = async (
   cursor: string | undefined,
   limit: number,
-  searchQuery: string,
-  sortOrder = SortOrder.DESCENDING
+  searchQuery: string
 ): Promise<LibraryItems> => {
   const data = JSON.stringify({
     variables: {
-        after: cursor,
-        sharedOnly: false,
-        first: limit,
-        query: searchQuery,
-        sort: {
-          order: sortOrder,
-          by: 'UPDATED_TIME',
-        },
+      after: cursor,
+      first: limit,
+      format: "markdown",
+      includeContent: true,
+      query: searchQuery,
     },
-    query: `query GetArticles(
-      $sharedOnly: Boolean
-      $sort: SortParams
+    query: `query Search(
       $after: String
       $first: Int
       $query: String
+      $includeContent: Boolean
+      $format: String
     ) {
-      articles(
-        sharedOnly: $sharedOnly
-        sort: $sort
-        first: $first
+      search(
         after: $after
+        first: $first
         query: $query
+        includeContent: $includeContent
+        format: $format
       ) {
-        ... on ArticlesSuccess {
+        ... on SearchSuccess {
           edges {
             node {
-              id
-              title
-              originalArticleUrl
-              highlights {
-                id
-                quote
-                annotation
-              }
+              slug
+              content
             }
           }
           pageInfo {
@@ -97,41 +82,50 @@ const fetchPage = async (
             totalCount
           }
         }
-        ... on ArticlesError {
+        ... on SearchError {
           errorCodes
         }
       }
     }
-  `
-  })
+  `,
+  });
 
-  const response = await axios.post(`${API_URL}/graphql`, data,
-  {
+  const response = await axios.post(`${API_URL}/graphql`, data, {
     headers: {
       Cookie: `auth=${process.env.OMNIVORE_AUTH_TOKEN};`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
-  return response.data.data.articles as LibraryItems
-}
+  return response.data.data.search as LibraryItems;
+};
 
 // This iterator handles pagination of the Omnivore API. It will fetch all items
 // matching the search query.
 async function* fetchAllLinks(start: string | undefined, searchQuery: string) {
-  let cursor = start
-  let hasNextPage = true
+  let cursor = start;
+  let hasNextPage = true;
   while (hasNextPage) {
-    const nextPage = await fetchPage(cursor, 10, searchQuery)
+    const nextPage = await fetchPage(cursor, 10, searchQuery);
     for (const edge of nextPage.edges) {
-      yield edge.node
+      yield edge.node;
     }
-    cursor = nextPage.pageInfo.endCursor
-    hasNextPage = nextPage.pageInfo.hasNextPage
+    cursor = nextPage.pageInfo.endCursor;
+    hasNextPage = nextPage.pageInfo.hasNextPage;
   }
 }
 
-(async function() {
+(async function () {
+  try {
+    fs.mkdirSync("documents");
+  } catch {}
+
+  var downloaded = 0;
   for await (const item of fetchAllLinks(undefined, SEARCH_TERM)) {
-    console.log(item);
+    fs.writeFileSync(`documents/${item.slug}.md`, item.content);
+
+    downloaded = downloaded + 1;
+    if (downloaded > 20) {
+      break;
+    }
   }
 })();
