@@ -1,7 +1,8 @@
 # omnivore-api-demo
 
 A simple demo of Omnivore's API. This app connects to Omnivore's API, and paginates through
-all of the supplied user's saved articles and highlights.
+all of the supplied user's recently saved articles and saves their contents as markdown
+into a `documents` directory.
 
 Optionally you can set a search term.
 
