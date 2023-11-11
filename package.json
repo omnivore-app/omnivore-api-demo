@@ -16,6 +16,6 @@
   },
   "dependencies": {
     "@types/node": "^18.11.18",
-    "axios": "^0.26.0"
+    "axios": "^1.6.0"
   }
 }
